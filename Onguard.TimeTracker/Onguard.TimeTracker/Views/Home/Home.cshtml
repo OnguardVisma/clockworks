@@ -1,0 +1,243 @@
+﻿@* @using Onguard.TimeTracker.BLL.Utilities *@
+@using Onguard.TimeTracker.BLL
+@model Onguard.TimeTracker.BLL.HomeViewModel
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+@section Scripts {
+    <script type="text/JavaScript">
+        $(document).ready(function () {
+            // Disable the 'EndDate' field when no startdate has been chosen yet
+            window.$("#endDate").attr("disabled", 'disabled');
+        });
+
+        // On Change - StartDate
+        $("#startDate").change(function () {
+            if (window.$("#startDate").val()) {
+                // If 'StartDate' has been set, enable the EndDate selector
+                window.$("#endDate").prop("disabled", false);
+                // Then copy the 'StartDate' value to the 'EndDate' value
+                window.$("#endDate").val(window.$("#startDate").val());
+
+            }
+        });
+    </script>
+    <script src="//code.jquery.com/ui/1.11.4/jquery-ui.js"></script>
+}
+
+<div class="input-container">
+    <div>
+        <table>
+            <tr>
+                <td>
+                    <!-- Input fields -->
+                    @using (Html.BeginForm("UpdateProject", "Home"))
+                    {
+                        <!-- Step 1: Select project -->
+                        <fieldset>
+                            <h3>
+                                @if (Model.Input.SelectedProject != null)
+                                {
+                                    <img width="20" height="20" style="margin-bottom: 4px" src="~/cancel.png" alt="" onclick="location.href='@Url.Action("Home", "Home")'" />
+                                }
+                                @(Model.Input.SelectedProject == null ? "Select" : "Selected") project
+                            </h3>
+
+                            <!-- Project selector-->
+                            @(Model.Input.SelectedProject == null
+                                ? Html.DropDownListFor(m => m.Input.SelectedProject, Model.Projects.OrderBy(m => m.Text), "Select Project", new { @class = "form-control", onchange = "this.form.submit();" })
+                                : Html.DropDownListFor(m => m.Input.SelectedProject, Model.Projects, "Select Project", new { @class = "form-control", disabled = "disabled", onchange = "this.form.submit();" }))
+                        </fieldset>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.Input.SelectedProject))
+                    {
+                        <!-- Step 3 / Option 2: Select on dates -->
+                        using (Html.BeginForm("UpdateDates", "Home"))
+                        {
+                            <h3>
+                                @(Model.Input.SelectedStartDate == DateTime.MinValue && Model.Input.SelectedEndDate == DateTime.MinValue ? "Select" : "Selected") dates
+                            </h3>
+                            <fieldset>
+                                <!-- Hidden field to save project selection-->
+                                @Html.HiddenFor(m => m.Input.SelectedProject)
+
+                                <!-- Start date -->
+                                @(Model.Input.SelectedStartDate == DateTime.MinValue
+                                    ? Html.TextBoxFor(model => model.Input.SelectedStartDate, new { id = "startDate", type = "date", @class = "datefield form-control" })
+                                    : Html.TextBoxFor(model => model.Input.SelectedStartDate, new { id = "startDate", Value = Model.Input.SelectedStartDate.ToString("yyyy-MM-dd"), type = "date", @class = "datefield form-control", disabled = "disabled" }))
+                                <!-- End date -->
+                                @(Model.Input.SelectedEndDate == DateTime.MinValue
+                                    ? Html.TextBoxFor(model => model.Input.SelectedEndDate, new { id = "endDate", type = "date", @class = "datefield form-control", data_mindate = Model.Input.SelectedStartDate.ToString("yyyy-MM-dd") })
+                                    : Html.TextBoxFor(model => model.Input.SelectedEndDate, new { id = "endDate", Value = Model.Input.SelectedEndDate.ToString("yyyy-MM-dd"), type = "date", @class = "datefield form-control", disabled = "disabled", data_date_min_date = Model.Input.SelectedStartDate }))
+                                <button type="submit">Select Date</button>
+
+                            </fieldset>
+                        }
+                    }
+                </td>
+                @using (Html.BeginForm("GenerateReport", "Home"))
+                {
+                    if (Model.ReadyToReport)
+                    {
+                        <td>
+                            <div>
+                                <h3>PBI Selection</h3>
+                                <table>
+                                    <tr>
+                                        <td style="width: 100px">
+                                            @Html.LabelFor(model => model.Input.IncludeWorkItemTypePbi)
+                                        </td>
+                                        <td style="width: 100px">
+                                            @Html.CheckBoxFor(model => model.Input.IncludeWorkItemTypePbi)
+                                        </td>
+                                    </tr>
+                                </table>
+                                <table>
+                                    <tr>
+                                        <td style="width: 100px">
+                                            @Html.LabelFor(model => model.Input.IncludeWorkItemTypeDefect)
+                                        </td>
+                                        <td style="width: 100px">
+                                            @Html.CheckBoxFor(model => model.Input.IncludeWorkItemTypeDefect)
+                                        </td>
+                                    </tr>
+                                </table>
+                                <table>
+                                    <tr>
+                                        <td style="width: auto">
+                                            @Html.LabelFor(model => model.Input.PbiTag)
+                                        </td>
+                                        <td>
+                                            @Html.TextBoxFor(model => model.Input.PbiTag)
+                                        </td>
+                                    </tr>
+                                </table>
+
+
+                            </div>
+                        </td>
+                        <td>
+
+                            <div class="input-generate-report">
+                                @Html.Partial("HomeInputHiddenFields", Model)
+                                <input name="submit" class="form-control" type="submit" id="view" value="View" />
+                                <input name="submit" class="form-control" type="submit" id="json" value="CSV" />
+                            </div>
+                        </td>
+                    }
+                }
+            </tr>
+        </table>
+
+    </div>
+</div>
+
+@if (Model.Report?.ReportRowViews != null)
+{
+    <div class="result-container">
+        <h3>Development vs Maintenance</h3>
+        <table>
+            <thead></thead>
+            <tbody>
+                <tr>
+                    <th></th>
+                    <th>Duration</th>
+                    <th>Percentage</th>
+                </tr>
+                <tr style="border-bottom: 2px solid grey">
+                    <td width="160px">Development</td>
+                    <td width="160px">@string.Format("{0:hh\\:mm\\:ss}", @Model.Report.PercentageView.DevelopmentHours)</td>
+                    <td width="160px">@string.Format("{0:0.00}", @Model.Report.PercentageView.DevelopmentPercentage)</td>
+                </tr>
+                <tr style="border-bottom: 2px solid grey">
+                    <td>Maintenance</td>
+                    <td>@string.Format("{0:hh\\:mm\\:ss}", @Model.Report.PercentageView.MaintenanceHours)</td>
+                    <td>@string.Format("{0:0.00}", @Model.Report.PercentageView.MaintenancePercentage)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Report</h3>
+        @if (Model.Report.ReportRowViews.Any())
+        {
+            <table>
+                <thead></thead>
+                <tbody>
+                    <tr>
+                        <th>PBI</th>
+                        <th>D/M</th>
+                        <th>Title</th>
+                        <th>TaskID</th>
+                        <th>Changed by</th>
+                        <th>Start date</th>
+                        <th>Done date</th>
+                        <th>Duration</th>
+                    </tr>
+                    <tr style="border-bottom: 2px solid grey"></tr>
+                    @foreach (var item in Model.Report.ReportRowViews)
+                    {
+                        <tr>
+                            <td width="60px">
+                                <a target="_blank" href="@item.PbiUrl">@item.Pbi.Id</a>
+                            </td>
+                            <td>@item.DM</td>
+                            <td width="auto">@item.Pbi.Fields["System.Title"]</td>
+                            <td width="60px">
+                                <a target="_blank" href="@item.TaskUrl">@item.TaskId</a>
+                            </td>
+                            <td width="160px">@item.DoneBy</td>
+                            <td width="160px"> @item.StartDate</td>
+                            <td width="160px">@item.DoneDate</td>
+                            <td width="30px" style="text-align: right;">
+                                <b>@string.Format("{0:hh\\:mm\\:ss}", item.TotalWorkHours)</b>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <h3>Overlapping tasks</h3>
+            <table>
+                <thead></thead>
+                <tbody>
+                    <tr>
+                        <th>Changed By</th>
+                        <th>Title</th>
+                        <th width="60px"></th>
+                        <th>Task</th>
+                        <th width="60px"></th>
+                        <th>Overlaps with</th>
+                    </tr>
+                    @if (Model.Report.ReportRowViews.Any(vm => vm.OverlappingTasks.Any()))
+                    {
+                        foreach (var reportRow in Model.Report.ReportRowViews.Where(vm => vm.OverlappingTasks.Any()))
+                        {
+                            <tr>
+                                <td>@TextHelper.RemoveTextBetweenBrackets(reportRow.DoneBy, '<', '>')</td>
+                                <td width="auto">@reportRow.Pbi.Fields["System.Title"]</td>
+                                <td width="60px"></td>
+                                <td width="60px">
+                                    <a target="_blank" href="@reportRow.TaskUrl">@reportRow.TaskId</a>
+                                </td>
+                                <td width="60px"></td>
+                                <td>
+                                    @foreach (var overlappingViewModel in reportRow.OverlappingTasks.ToArray())
+                                    {
+                                        <a target="_blank" href="@overlappingViewModel.TaskUrl">@overlappingViewModel.TaskId</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <div style="padding: 10px">No data is available with the selected parameters</div>
+        }
+    </div>
+}
