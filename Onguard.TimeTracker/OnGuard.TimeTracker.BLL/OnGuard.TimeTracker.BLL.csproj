@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netcoreapp3.1</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Messaia.Net.Mvc.Rendering" Version="3.1.0-rc22" />
+      <PackageReference Include="Microsoft.TeamFoundationServer.Client" Version="16.164.0-preview" />
+      <PackageReference Include="ServiceStack.Text" Version="5.8.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Onguard.TimeTracker.DAL\Onguard.TimeTracker.DAL.csproj" />
+    </ItemGroup>
+
+</Project>

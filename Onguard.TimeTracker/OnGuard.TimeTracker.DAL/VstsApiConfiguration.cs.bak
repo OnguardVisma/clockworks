@@ -1,0 +1,8 @@
+namespace Onguard.TimeTracker.DAL
+{
+    public static class VstsApiConfiguration
+    {
+        public static readonly string Psa = "qmslhyjim7xewghy37f7iuqwaqp77roq4j65vwmoiawdb547d47q";
+        public static readonly string Url = "https://rogue-wan.visualstudio.com";
+    }
+}

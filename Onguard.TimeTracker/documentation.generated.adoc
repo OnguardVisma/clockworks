@@ -1,0 +1,42 @@
+= Generated documentation
+Michaël Hompus <michael@hompus.nl>
+0.1.0, 2020-03-24
+:toc: left
+:toc-level: 2
+:sectnums:
+:icons: font
+
+NOTE: This document has been automatically generated
+
+The documentation is generated from the source code of https://github.com/dotnet-architecture/eShopOnContainers[eShopOnContainers^].
+
+
+// tag::aggregates[]
+== Aggregates
+Aggregates in the eShop application.
+// end::aggregates[]
+
+// tag::commands[]
+== Commands
+Commands in the eShop application.
+// end::commands[]
+
+// tag::commandhandlers[]
+== Command Handlers
+Command handlers in the eShop application.
+// end::commandhandlers[]
+
+// tag::domainevents[]
+== Domain Events
+Domain events in the eShop application.
+// end::domainevents[]
+
+// tag::domaineventhandlers[]
+== Domain Event Handlers
+Domain event handlers in the eShop application.
+// end::domaineventhandlers[]
+
+// tag::integrationevents[]
+== Integration Events
+Integration events in the eShop application.
+// end::integrationevents[]
