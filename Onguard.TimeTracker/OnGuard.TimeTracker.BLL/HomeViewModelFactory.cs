@@ -5,6 +5,7 @@ using Onguard.TimeTracker.DAL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Onguard.TimeTracker.BLL
 {
@@ -12,59 +13,58 @@ namespace Onguard.TimeTracker.BLL
     public class HomeViewModelFactory
     {
         private readonly InputViewModelFactory _inputViewModelFactory;
-        private readonly VstsApi _vstsApi;
+        private readonly IVstsApi _vstsApi;
 
-        public HomeViewModelFactory()
+        public HomeViewModelFactory(IVstsApi vstsApi)
         {
-            _vstsApi = new VstsApi(VstsApiConfiguration.Url, VstsApiConfiguration.Psa);
+            _vstsApi = vstsApi;
             _inputViewModelFactory = new InputViewModelFactory();
         }
 
-        public HomeViewModel CreateWithProject(IFormCollection formCollection)
+        public async Task<HomeViewModel> CreateWithProject(IFormCollection formCollection)
         {
-            var inputViewModel = _inputViewModelFactory.Create(formCollection);
-
             var viewModel = new HomeViewModel
             {
                 Input = _inputViewModelFactory.Create(formCollection),
-                Projects = _vstsApi.GetProjects().Select(p => new SelectListItem() { Text = p.Name, Value = p.Name, Selected = p.Name == inputViewModel.SelectedProject }),
+                Projects = await GetProjectsSelectListItem()
             };
 
             return viewModel;
         }
 
-        public HomeViewModel Create()
+        public async Task<HomeViewModel> Create()
         {
             var viewModel = new HomeViewModel
             {
                 Input = new InputViewModel(),
-                Projects = _vstsApi.GetProjects().Select(p => new SelectListItem() { Text = p.Name, Value = p.Name })
+                Projects = await GetProjectsSelectListItem()
             };
 
             return viewModel;
         }
 
-        public HomeViewModel CreateWithDates(IFormCollection formCollection)
+        public async Task<HomeViewModel> CreateWithDates(IFormCollection formCollection)
         {
             var inputViewModel = _inputViewModelFactory.Create(formCollection);
 
             var viewModel = new HomeViewModel
             {
                 Input = inputViewModel,
-                Projects = _vstsApi.GetProjects().Select(p => new SelectListItem { Text = p.Name, Value = p.Name })
+                Projects = await GetProjectsSelectListItem()
             };
 
             return viewModel;
         }
 
-        public HomeViewModel CreateWithInput(IFormCollection formCollection)
+        public async Task<HomeViewModel> CreateWithInput(IFormCollection formCollection)
         {
             var inputViewModel = _inputViewModelFactory.Create(formCollection);
 
+            var projects = await GetProjectsSelectListItem();
+
             if (!string.IsNullOrEmpty(inputViewModel.SelectedProject) && !string.IsNullOrEmpty(inputViewModel.SelectedTeam) && !string.IsNullOrEmpty(inputViewModel.SelectedSprint))
             {
-                var projects = _vstsApi.GetProjects().Select(p => new SelectListItem { Text = p.Name, Value = p.Name });
-                var report = ConstructViewModel(inputViewModel, _vstsApi.GetReport(inputViewModel.SelectedProject, inputViewModel.SelectedTeam, inputViewModel.SelectedSprint));
+                var report = await ConstructViewModel(inputViewModel, await _vstsApi.GetReport(inputViewModel.SelectedProject, inputViewModel.SelectedTeam, inputViewModel.SelectedSprint));
 
                 // Generate report based on sprint
                 return new HomeViewModel
@@ -79,15 +79,21 @@ namespace Onguard.TimeTracker.BLL
             return new HomeViewModel
             {
                 Input = inputViewModel,
-                Projects = _vstsApi.GetProjects().Select(p => new SelectListItem { Text = p.Name, Value = p.Name }),
-
-                Report = ConstructViewModel(inputViewModel, _vstsApi.GetReport(inputViewModel.SelectedProject,
+                Projects = projects,
+                Report = await ConstructViewModel(inputViewModel, await _vstsApi.GetReport(inputViewModel.SelectedProject,
                     inputViewModel.SelectedTeam, inputViewModel.SelectedStartDate, inputViewModel.SelectedEndDate,
                     inputViewModel.PbiTag, inputViewModel.IncludeWorkItemTypePbi, inputViewModel.IncludeWorkItemTypeDefect))
             };
         }
 
-        private ReportViewModel ConstructViewModel(InputViewModel inputViewModel, IEnumerable<WorkItem> workItems)
+        private async Task<IEnumerable<SelectListItem>> GetProjectsSelectListItem()
+        {
+            var projects = await _vstsApi.GetProjects();
+
+            return projects.Select(p => new SelectListItem { Text = p.Name, Value = p.Name });
+        }
+
+        private async Task<ReportViewModel> ConstructViewModel(InputViewModel inputViewModel, IEnumerable<WorkItem> workItems)
         {
             // Create WorkItemViewModel
             var workItemsViewModel = new List<ReportRowViewModel>();
@@ -115,7 +121,7 @@ namespace Onguard.TimeTracker.BLL
             };
 
             // Get the PBI's
-            var productBacklogItems = _vstsApi.GetWorkItems(unqiqueProductBacklogItems);
+            var productBacklogItems = await _vstsApi.GetWorkItems(unqiqueProductBacklogItems);
 
             foreach (var workItem in enumerable)
             {
@@ -126,14 +132,14 @@ namespace Onguard.TimeTracker.BLL
                     const string InProgress = "In Progress";
                     const string Done = "Done";
 
-                    var workItemRevisions = _vstsApi.GetWorkItemRevisions(workItem.Id.Value);
+                    var workItemRevisions = await _vstsApi.GetWorkItemRevisions(workItem.Id.Value);
 
                     var firstDate = DateTime.Parse(workItemRevisions.Values[0].Fields.WorkItemChangedDate);
                     var lastDate = DateTime.Parse(workItemRevisions.Values[workItemRevisions.Count - 1].Fields.WorkItemChangedDate);
 
                     var isBusy = false;
                     var previousState = "To Do";
-                    var pbiId = int.Parse((string)(workItem.Relations.FirstOrDefault(r => r.Rel == "System.LinkTypes.Hierarchy-Reverse")?.Url.Split('/').LastOrDefault() ?? throw new InvalidOperationException()));
+                    var pbiId = int.Parse(workItem.Relations.FirstOrDefault(r => r.Rel == "System.LinkTypes.Hierarchy-Reverse")?.Url.Split('/').LastOrDefault() ?? throw new InvalidOperationException());
                     var assignee = "";
                     var prevAssignee = "";
 
@@ -283,6 +289,5 @@ namespace Onguard.TimeTracker.BLL
             for (var day = from.Date; day.Date <= thru.Date; day = day.AddDays(1))
                 yield return day;
         }
-
     }
 }

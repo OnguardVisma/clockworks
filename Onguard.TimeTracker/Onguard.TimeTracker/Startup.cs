@@ -1,17 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.AzureAD.UI;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Onguard.TimeTracker.DAL;
 
 namespace Onguard.TimeTracker
 {
@@ -38,6 +34,7 @@ namespace Onguard.TimeTracker
                 options.Filters.Add(new AuthorizeFilter(policy));
             });
             services.AddRazorPages();
+            services.AddVstsApi();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
