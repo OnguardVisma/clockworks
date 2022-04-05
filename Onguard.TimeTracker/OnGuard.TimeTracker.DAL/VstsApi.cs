@@ -5,28 +5,29 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 
 namespace Onguard.TimeTracker.DAL
 {
-    public class VstsApi : IVstsApi
+    internal class VstsApi : IVstsApi
     {
         /// <summary>
         /// Url of VSTS
         /// </summary>
-        private string Url { get; }
+        private readonly string _url;
 
         /// <summary>
         /// Required identifier that can be created through VSTS
         /// </summary>
-        private string PersonalAccessToken { get; }
+        private readonly string _token;
 
         /// <summary>
         /// ApiVersion
         /// </summary>
-        private string ApiVersion { get; }
+        private readonly string _apiVersion;
 
         /// <summary>
         /// Credentials that get generated for your PersonalAccessToken
@@ -43,10 +44,10 @@ namespace Onguard.TimeTracker.DAL
             if (string.IsNullOrEmpty(url)) throw new ArgumentNullException(nameof(url));
             if (string.IsNullOrEmpty(personalAccessToken)) throw new ArgumentNullException(nameof(url));
 
-            Url = url;
-            PersonalAccessToken = personalAccessToken;
-            ApiVersion = "";
-            _vssCredentials = new VssBasicCredential("", PersonalAccessToken);
+            _url = url;
+            _token = personalAccessToken;
+            _apiVersion = string.Empty;
+            _vssCredentials = new VssBasicCredential(string.Empty, _token);
         }
 
         /// <inheritdoc />
@@ -54,10 +55,10 @@ namespace Onguard.TimeTracker.DAL
         /// Get all projects
         /// </summary>
         /// <returns>Collection of project names</returns>
-        public IEnumerable<ProjectModel> GetProjects()
+        public async Task<IEnumerable<ProjectModel>> GetProjects()
         {
-            var result = SendApiUrlRequest("_apis/projects?stateFilter=All" + ApiVersion).Content
-                .ReadAsAsync<VstsListResponse.List>().Result;
+            var response = await SendApiUrlRequest("_apis/projects?stateFilter=All" + _apiVersion);
+            var result = await response.Content.ReadAsAsync<VstsListResponse.List>();
 
             return result.Values.Length > 0 ? result.Values.Select(r => new ProjectModel(r.Name, r.Url)) : null;
         }
@@ -67,7 +68,7 @@ namespace Onguard.TimeTracker.DAL
         /// Get work items for given sprint within a project
         /// </summary>
         /// <returns>Collection of work items</returns>
-        public IEnumerable<WorkItem> GetReport(string project, string team, string sprint)
+        public Task<IEnumerable<WorkItem>> GetReport(string project, string team, string sprint)
         {
             if (string.IsNullOrEmpty(project)) throw new ArgumentNullException(nameof(project));
             if (string.IsNullOrEmpty(sprint)) throw new ArgumentNullException(nameof(sprint));
@@ -93,7 +94,7 @@ namespace Onguard.TimeTracker.DAL
         /// Get work items between given dates within a project
         /// </summary>
         /// <returns>Collection of work items</returns>
-        public IEnumerable<WorkItem> GetReport(string project, string team, DateTime startDate, DateTime endDate,
+        public async Task<IEnumerable<WorkItem>> GetReport(string project, string team, DateTime startDate, DateTime endDate,
             string tag, bool includePbis, bool includeDefects)
         {
             if (string.IsNullOrEmpty(project)) throw new ArgumentNullException(nameof(project));
@@ -147,78 +148,7 @@ namespace Onguard.TimeTracker.DAL
 
             foreach (var wiql in queries)
             {
-                result.AddRange(GetWorkItems(wiql));
-            }
-
-            return result;
-        }
-
-        /// <summary>
-        /// Internal method for sending http request
-        /// </summary>
-        /// <param name="url">url</param>
-        /// <returns>HttpResponseMessage</returns>
-        private HttpResponseMessage SendApiUrlRequest(string url)
-        {
-            //Prompt user for credential
-            //VssConnection connection = new VssConnection(new Uri(url), new VssClientCredentials());
-
-            var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{PersonalAccessToken}"));
-            using (var client = new HttpClient())
-            {
-                client.BaseAddress = new Uri(Url);
-                client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-                return client.GetAsync(url).Result;
-            }
-        }
-
-        /// <summary>
-        /// Internal method for collection WorkItems based on a Wiql query
-        /// </summary>
-        /// <param name="wiql"></param>
-        /// <returns></returns>
-        private IEnumerable<WorkItem> GetWorkItems(Wiql wiql)
-        {
-            var result = new List<WorkItem>();
-            
-            using (var workItemTrackingHttpClient = new WorkItemTrackingHttpClient(new Uri(Url), _vssCredentials))
-            {
-                try
-                {
-                    var workItemQueryResult = workItemTrackingHttpClient.QueryByWiqlAsync(wiql).Result;
-                    var workItems = new List<int>();
-
-                    if (workItemQueryResult.WorkItemRelations != null)
-                    {
-                        workItems = (from workItemLink in workItemQueryResult.WorkItemRelations
-                                where workItemLink.Source == null
-                                select workItemLink.Target.Id)
-                            .ToList();
-                    }
-                    else
-                    {
-                        workItems.AddRange(workItemQueryResult.WorkItems
-                            .Select(workItemReference => workItemReference.Id));
-                    }
-
-                    ;
-
-                    if (workItems.Any())
-                    {
-                        // Collect WorkItems
-                        result = workItemTrackingHttpClient
-                            .GetWorkItemsAsync(workItems, null, null, WorkItemExpand.Relations, null, null,
-                                CancellationToken.None).Result;
-
-                    }
-                }
-                catch (Exception e)
-                {
-                    var message = e.Message;
-                    message += "";
-                }
+                result.AddRange(await GetWorkItems(wiql));
             }
 
             return result;
@@ -229,10 +159,10 @@ namespace Onguard.TimeTracker.DAL
         /// </summary>
         /// <param name="ids"></param>
         /// <returns></returns>
-        public List<WorkItem> GetWorkItems(IEnumerable<int> ids)
+        public async Task<List<WorkItem>> GetWorkItems(IEnumerable<int> ids)
         {
             var workItems = new List<WorkItem>();
-            using (var workItemTrackingHttpClient = new WorkItemTrackingHttpClient(new Uri(Url), _vssCredentials))
+            using (var workItemTrackingHttpClient = new WorkItemTrackingHttpClient(new Uri(_url), _vssCredentials))
             {
                 var enumerableWOrkitemIds = ids.ToList();
                 foreach (var workItemId in enumerableWOrkitemIds)
@@ -240,8 +170,8 @@ namespace Onguard.TimeTracker.DAL
                     WorkItem workItem = null;
                     try
                     {
-                        workItem = workItemTrackingHttpClient.GetWorkItemsAsync(new[] {workItemId}, null, null,
-                            WorkItemExpand.Relations).Result.FirstOrDefault();
+                        workItem = (await workItemTrackingHttpClient.GetWorkItemsAsync(new[] {workItemId}, null, null,
+                            WorkItemExpand.Relations)).FirstOrDefault();
                     }
                     finally
                     {
@@ -258,16 +188,84 @@ namespace Onguard.TimeTracker.DAL
         /// </summary>
         /// <param name="workItemId"></param>
         /// <returns>WorkItems</returns>
-        public ListofRevisionsReponse.Revisions GetWorkItemRevisions(int workItemId)
+        public async Task<ListofRevisionsReponse.Revisions> GetWorkItemRevisions(int workItemId)
         {
-            var response = SendApiUrlRequest($"_apis/wit/workitems/{workItemId}/revisions?$expand=relations" + ApiVersion);
+            var response = await SendApiUrlRequest($"_apis/wit/workitems/{workItemId}/revisions?$expand=relations" + _apiVersion);
 
             return response.IsSuccessStatusCode
-                ? response.Content.ReadAsAsync<ListofRevisionsReponse.Revisions>().Result
+                ? await response.Content.ReadAsAsync<ListofRevisionsReponse.Revisions>()
                 : new ListofRevisionsReponse.Revisions();
         }
 
-        public IEnumerable<DateTime> EachDay(DateTime from, DateTime thru)
+        /// <summary>
+        /// Internal method for sending http request
+        /// </summary>
+        /// <param name="url">url</param>
+        /// <returns>HttpResponseMessage</returns>
+        private async Task<HttpResponseMessage> SendApiUrlRequest(string url)
+        {
+            var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{_token}"));
+            using (var client = new HttpClient())
+            {
+                client.BaseAddress = new Uri(_url);
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+                return await client.GetAsync(url);
+            }
+        }
+
+        /// <summary>
+        /// Internal method for collection WorkItems based on a Wiql query
+        /// </summary>
+        /// <param name="wiql"></param>
+        /// <returns></returns>
+        private async Task<IEnumerable<WorkItem>> GetWorkItems(Wiql wiql)
+        {
+            var result = new List<WorkItem>();
+
+            using (var workItemTrackingHttpClient = new WorkItemTrackingHttpClient(new Uri(_url), _vssCredentials))
+            {
+                try
+                {
+                    var workItemQueryResult = await workItemTrackingHttpClient.QueryByWiqlAsync(wiql);
+                    var workItems = new List<int>();
+
+                    if (workItemQueryResult.WorkItemRelations != null)
+                    {
+                        workItems = (from workItemLink in workItemQueryResult.WorkItemRelations
+                                     where workItemLink.Source == null
+                                     select workItemLink.Target.Id)
+                            .ToList();
+                    }
+                    else
+                    {
+                        workItems.AddRange(workItemQueryResult.WorkItems
+                            .Select(workItemReference => workItemReference.Id));
+                    }
+
+                    ;
+
+                    if (workItems.Any())
+                    {
+                        // Collect WorkItems
+                        result = await workItemTrackingHttpClient
+                            .GetWorkItemsAsync(workItems, null, null, WorkItemExpand.Relations, null, null,
+                                CancellationToken.None);
+
+                    }
+                }
+                catch (Exception e)
+                {
+                    var message = e.Message;
+                    message += "";
+                }
+            }
+
+            return result;
+        }
+
+        private IEnumerable<DateTime> EachDay(DateTime from, DateTime thru)
         {
             for (var day = from.Date; day.Date <= thru.Date; day = day.AddDays(1))
                 yield return day;
